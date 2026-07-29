@@ -1262,6 +1262,33 @@ class Health {
     return stepsCount;
   }
 
+  /// Get the priority-reconciled total for [type] within a time period, counting
+  /// only the source packages in [dataOriginFilter].
+  ///
+  /// Health Connect reconciles overlapping records across sources using the user's
+  /// configured data-source priority, so the result matches the Health Connect app
+  /// rather than summing every source. Passing only the non-manual source packages
+  /// leaves manually entered data out of the total. An empty [dataOriginFilter]
+  /// counts every source. Returns null if not successful. Android / Health Connect only.
+  Future<double?> getAggregatedTotalFiltered(
+    HealthDataType type,
+    DateTime startTime,
+    DateTime endTime, {
+    List<String> dataOriginFilter = const [],
+  }) async {
+    final args = <String, dynamic>{
+      'dataTypeKey': type.name,
+      'startTime': startTime.millisecondsSinceEpoch,
+      'endTime': endTime.millisecondsSinceEpoch,
+      'dataOriginFilter': dataOriginFilter,
+    };
+    final total = await _channel.invokeMethod(
+      'getAggregatedTotalFiltered',
+      args,
+    );
+    return (total as num?)?.toDouble();
+  }
+
   /// Assigns numbers to specific [HealthDataType]s.
   int _alignValue(HealthDataType type) => switch (type) {
         HealthDataType.SLEEP_IN_BED => 0,
