@@ -5,6 +5,7 @@ import android.os.Handler
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.records.*
+import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
@@ -169,9 +170,63 @@ class HealthDataReader(
     }
 
     /**
+     * Retrieves a single priority-reconciled aggregate total for one data type,
+     * restricted to a set of data-origin packages.
+     *
+     * Health Connect reconciles overlapping records across sources using the user's
+     * configured data-source priority, so this total matches what the Health Connect
+     * app shows rather than a raw sum of every source. The dataOriginFilter lets the
+     * caller count only chosen sources (for example, to leave out apps whose data is
+     * entirely manually entered). An empty filter counts every source.
+     *
+     * @param call Method call containing 'dataTypeKey', 'startTime', 'endTime', 'dataOriginFilter'
+     * @param result Flutter result callback returning the total as a Double, or null on failure
+     */
+    fun getAggregatedTotalFiltered(call: MethodCall, result: Result) {
+        val dataType = call.argument<String>("dataTypeKey")!!
+        val start = Instant.ofEpochMilli(call.argument<Long>("startTime")!!)
+        val end = Instant.ofEpochMilli(call.argument<Long>("endTime")!!)
+        val origins = call.argument<List<String>>("dataOriginFilter") ?: emptyList()
+
+        scope.launch {
+            try {
+                val metric = HealthConstants.mapToAggregateMetric[dataType]
+                if (metric == null) {
+                    result.success(null)
+                    return@launch
+                }
+                val originSet = origins.map { DataOrigin(it) }.toSet()
+                val response = healthConnectClient.aggregate(
+                    AggregateRequest(
+                        metrics = setOf(metric),
+                        timeRangeFilter = TimeRangeFilter.between(start, end),
+                        dataOriginFilter = originSet,
+                    )
+                )
+                val total: Double = when (val value = response[metric]) {
+                    is Energy -> value.inKilocalories
+                    is Length -> value.inMeters
+                    is Long -> value.toDouble()
+                    is Int -> value.toDouble()
+                    is Double -> value
+                    else -> 0.0
+                }
+                Handler(context.mainLooper).run { result.success(total) }
+            } catch (e: Exception) {
+                Log.i(
+                    "FLUTTER_HEALTH::ERROR",
+                    "Unable to return aggregated total for $dataType due to the following exception:"
+                )
+                Log.e("FLUTTER_HEALTH::ERROR", Log.getStackTraceString(e))
+                result.success(null)
+            }
+        }
+    }
+
+    /**
      * Retrieves interval-based health data. Currently delegates to getAggregateData.
      * Maintained for API compatibility and potential future differentiation.
-     * 
+     *
      * @param call Method call with interval data parameters
      * @param result Flutter result callback returning interval data
      */
