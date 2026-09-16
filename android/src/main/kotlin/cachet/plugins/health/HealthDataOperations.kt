@@ -70,6 +70,35 @@ class HealthDataOperations(
     }
 
     /**
+     * Returns which of the requested data types have been granted read access. Reads the granted
+     * permissions once for all types and never triggers a permission request dialog. A failure,
+     * such as a rate limit, is returned as an error rather than as types not granted.
+     *
+     * @param call Method call containing 'types' (data types)
+     * @param result Flutter result callback returning the granted data type keys
+     */
+    fun getGrantedReadTypes(call: MethodCall, result: Result) {
+        val args = call.arguments as HashMap<*, *>
+        val types = (args["types"] as? ArrayList<*>)?.filterIsInstance<String>() ?: emptyList()
+
+        scope.launch {
+            try {
+                val granted = healthConnectClient.permissionController.getGrantedPermissions()
+                result.success(
+                        types.filter { typeKey ->
+                            val dataType = HealthConstants.mapToType[typeKey]
+                            dataType != null &&
+                                    granted.contains(HealthPermission.getReadPermission(dataType))
+                        },
+                )
+            } catch (e: Exception) {
+                Log.e("FLUTTER_HEALTH::ERROR", "Error reading granted permissions: ${e.message}")
+                result.error("PERMISSION_CHECK_FAILED", e.message, null)
+            }
+        }
+    }
+
+    /**
      * Prepares a list of Health Connect permission strings for authorization requests. Converts
      * Flutter data types and permission levels into Health Connect permission format.
      *

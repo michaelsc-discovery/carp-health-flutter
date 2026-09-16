@@ -125,6 +125,34 @@ class Health {
     });
   }
 
+  /// Returns the health data [types] that have been granted READ access.
+  ///
+  /// The granted permissions are read once for all [types], and no permission
+  /// dialog is shown. A failure such as a rate limit throws a [PlatformException]
+  /// instead of reporting the types as not granted, which is what
+  /// [hasPermissions] does.
+  ///
+  /// Android only. Throws an [UnsupportedError] on iOS, where HealthKit does not
+  /// disclose READ access.
+  Future<List<HealthDataType>> getGrantedReadTypes(
+    List<HealthDataType> types,
+  ) async {
+    if (!Platform.isAndroid) {
+      throw UnsupportedError(
+        'getGrantedReadTypes is only available on Android',
+      );
+    }
+    await _checkIfHealthConnectAvailableOnAndroid();
+
+    final granted = await _channel.invokeListMethod<String>(
+      'getGrantedReadTypes',
+      {"types": types.map((type) => type.name).toList()},
+    );
+    return types
+        .where((type) => granted?.contains(type.name) ?? false)
+        .toList();
+  }
+
   /// Revokes Google Health Connect permissions on Android of all types.
   ///
   /// NOTE: The app must be completely killed and restarted for the changes to take effect.
