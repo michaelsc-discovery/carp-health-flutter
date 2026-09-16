@@ -130,6 +130,7 @@ class HealthPlugin(private var channel: MethodChannel? = null) :
 
             // Permissions
             "hasPermissions" -> dataOperations.hasPermissions(call, result)
+            "getGrantedReadTypes" -> dataOperations.getGrantedReadTypes(call, result)
             "requestAuthorization" -> requestAuthorization(call, result)
             "revokePermissions" -> dataOperations.revokePermissions(call, result)
 
